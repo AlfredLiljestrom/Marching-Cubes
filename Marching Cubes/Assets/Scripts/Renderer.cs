@@ -22,7 +22,7 @@ public class Renderer : MonoBehaviour
     public float perlinMul = .1f;
     public float perlinHeight = 1f;
 
-    int shape; 
+    public int shape; 
     ValueGenerator vg;
     MarchingCubes mc;
 
@@ -34,7 +34,9 @@ public class Renderer : MonoBehaviour
 
     void Start()
     {
+        chunkObjects = new List<GameObject>();
         setValues();
+        render();
     }
 
 
@@ -58,14 +60,6 @@ public class Renderer : MonoBehaviour
         }
     }
 
-    public void renderObject(int shape)
-    {
-        setValues();
-        chunkObjects = new List<GameObject>();
-        this.shape = shape;
-        render();
-    }
-
     void setValues()
     {
         prevNumChunks = numChunks;
@@ -79,6 +73,7 @@ public class Renderer : MonoBehaviour
 
     void render()
     {
+        Vector3 currentPosition = transform.position;
         //points = new Vector3[dimensions * dimensions * dimensions];
         //values = new float[points.Length];
 
@@ -114,7 +109,7 @@ public class Renderer : MonoBehaviour
 
         if (mc == null)
         {
-            mc = new MarchingCubes(dimensions, shader, numChunks, points);
+            mc = new MarchingCubes(dimensions, shader, numChunks, points, size);
         }
         else
         {
@@ -126,8 +121,8 @@ public class Renderer : MonoBehaviour
         generateChunks(mc.chunkInfos);
 
 
-
-
+        
+        transform.position = currentPosition;
     }
 
     void generateChunks(ChunkInfo[] chunkInfos)

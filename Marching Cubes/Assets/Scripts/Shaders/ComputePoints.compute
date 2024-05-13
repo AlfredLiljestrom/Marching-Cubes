@@ -29,9 +29,9 @@ float3 getMidpoint()
 
 float dist(float3 a, float3 b)
 {
-    float x = abs((float1) a.x - b.x);
-    float y = abs((float1) a.y - b.y);
-    float z = abs((float1) a.z - b.z);
+    float x = abs((float1) a.x - b.x) / dimX;
+    float y = abs((float1) a.y - b.y) / dimY;
+    float z = abs((float1) a.z - b.z) / dimZ;
     
     return length(float3(x, y, z));
 }
@@ -43,10 +43,11 @@ int calculateIndex(int x, int y, int z)
 
 float getValueCircle(float3 pos)
 {
+    float averageDim = (dimX + dimY + dimZ) / 3;
     float3 midpoint = getMidpoint();
-    float distance = dist(midpoint, pos);
-    float value = (distance - (float) dimX / 2) + 1;
-    return (value - (perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight)) +perlinHeight;
+    float distance = dist(midpoint, pos) * averageDim;
+    float value = (distance - (float) averageDim / 2) + 1;
+    return (value - (perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight)) + perlinHeight / 2;
 }
 
 float getValuePlane(float3 pos)
@@ -55,18 +56,19 @@ float getValuePlane(float3 pos)
     return ((pos.y - noise) - (perlinHeight + 1));
 }
 
-//float getValueTube(float3 pos)
-//{
-//    if (pos.x == dimX - 3 || pos.y == dimY - 3 || pos.z == dimZ - 3)
-//    {
-//        return -1; 
-//    }
-//    float3 midpoint = getMidpoint();
-//    float distance = dist(midpoint, pos);
-//    float value = (distance - (float) dimX / 2) + 1;
-//    float perlin3D = perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight;
-//    return - (value - perlin3D) + perlinHeight;
-//}
+float getValueTube(float3 pos)
+{
+    //if (pos.x == dimX - 3 || pos.y == dimY - 3 || pos.z == dimZ - 3)
+    //{
+    //    return -1;
+    //}
+    float averageDim = (dimX + dimY + dimZ) / 3;
+    float3 midpoint = getMidpoint();
+    float distance = dist(midpoint, pos) * averageDim;
+    float value = (distance - (float) averageDim / 2) + 1;
+    float perlin3D = (perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) - 1) / 2 * perlinHeight;
+    return -(value - perlin3D) - 2;
+}
 
 
 
@@ -84,14 +86,14 @@ void ComputePoints(uint3 id : SV_DispatchThreadID)
     {
         value = getValueCircle(pos);
     } 
-    else
+    else if (shape == 1)
     {
         value = getValuePlane(pos);
     }
-    //else
-    //{
-    //    value = getValueTube(pos);
-    //}
+    else
+    {
+        value = getValueTube(pos);
+    }
     
     
     pos = pos * size;

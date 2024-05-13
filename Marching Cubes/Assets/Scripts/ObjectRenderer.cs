@@ -14,6 +14,10 @@ public class ObjectRenderer : MonoBehaviour
     public GameObject groundPrefab;
     public bool createGround = false;
 
+    public GameObject cavePrefab;
+    public bool createCave = false;
+
+
     public List<GameObject> gameObjects;
 
     private void Start()
@@ -26,22 +30,20 @@ public class ObjectRenderer : MonoBehaviour
     {
         if (createBall )
         {
-            GameObject go = Instantiate(ballPrefab, Vector3.zero, Quaternion.identity);
-            Renderer r = go.GetComponent<Renderer>();
-            r.renderObject(0); 
-            gameObjects.Add(go);
-
+            gameObjects.Add(Instantiate(ballPrefab, Vector3.zero, Quaternion.identity));
             createBall = false;
         }
 
         if (createGround)
         {
-            GameObject go = Instantiate(groundPrefab, Vector3.zero, Quaternion.identity);
-            Renderer r = go.GetComponent<Renderer>();
-            r.renderObject(1);
-            gameObjects.Add(go);
-
+            gameObjects.Add(Instantiate(groundPrefab, Vector3.zero, Quaternion.identity));
             createGround = false;
+        }
+
+        if (createCave)
+        {
+            gameObjects.Add(Instantiate(cavePrefab, Vector3.zero, Quaternion.identity));
+            createCave = false;
         }
 
         if (spawnPlayer)

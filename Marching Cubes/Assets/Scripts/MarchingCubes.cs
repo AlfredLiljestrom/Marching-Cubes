@@ -19,18 +19,20 @@ public class MarchingCubes
     ComputeBuffer outputCubes;
     ComputeBuffer countBuffer;
 
-    Point[] points; 
+    Point[] points;
+    float size;
 
 
 
 
     public MarchingCubes(Vector3Int dim, 
-       ComputeShader shader, Vector3Int numChunks, Point[] points)
+       ComputeShader shader, Vector3Int numChunks, Point[] points, float size)
     {
         this.dim = dim;
         this.shader = shader;
         this.numChunks = numChunks;
         this.points = points; 
+        this.size = size;
     }
 
     public void setValues(Vector3Int dim, Vector3Int numChunks, Point[] points)
@@ -93,7 +95,7 @@ public class MarchingCubes
     public void MarchingCubesAlgorithmS()
     {
 
-
+        Vector3 mid = new Vector3((dim.x - 1), (dim.y - 1), (dim.z - 1)) * size / 2;
         
         // Run the shader 
         Triangle[] triangles2 = setupShader(points);
@@ -108,7 +110,12 @@ public class MarchingCubes
                 if (chunkInfos[triangle.chunkID] == null)
                     chunkInfos[triangle.chunkID] = new ChunkInfo(triangle.chunkID);
 
-                chunkInfos[triangle.chunkID].vertices.Add(triangle[i]);
+                Vector3 pos = (triangle[i] - mid);
+                pos.x /= dim.x - 1;
+                pos.y /= dim.y - 1;
+                pos.z /= dim.z - 1;
+
+                chunkInfos[triangle.chunkID].vertices.Add(pos);
                 chunkInfos[triangle.chunkID].increment();
             }
         }

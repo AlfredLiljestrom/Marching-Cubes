@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 7427780430285209083}
   - component: {fileID: -3482266416058485501}
   m_Layer: 0
-  m_Name: Ground
+  m_Name: Cave
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -44,13 +44,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ce02c516b05823a4c8b4d595e35ad99a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dimensions: {x: 5, y: 5, z: 5}
+  dimensions: {x: 20, y: 20, z: 20}
   size: 1
   shader: {fileID: 7200000, guid: bb8cc9a09b10d3c4fabf264b34e242a6, type: 3}
   shader2: {fileID: 7200000, guid: 11a7aab56ad1d6d409afe211e4405fb1, type: 3}
-  numChunks: {x: 1, y: 1, z: 1}
+  numChunks: {x: 2, y: 2, z: 2}
   chunkPrefab: {fileID: 7971213686179297666, guid: 1ad9aea034a6230499c3c442ca6a769d, type: 3}
-  dimensions2: 5
+  dimensions2: 20
   perlinMul: 0.1
   perlinHeight: 1
-  shape: 1
+  shape: 2

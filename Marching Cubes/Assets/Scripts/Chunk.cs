@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class Chunk : MonoBehaviour
 {
-    Mesh mesh;
+    Mesh mesh; 
     public int chunkID;
     [SerializeField] int verticesCount = 0;
     [SerializeField] int triangleCount = 0;
