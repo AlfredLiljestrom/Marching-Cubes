@@ -1,0 +1,161 @@
+#pragma kernel ComputeMesh
+#include "Tables.compute"
+
+
+struct Triangle
+{
+    float3 a;
+    float3 b;
+    float3 c;
+    int chunkID;  
+};
+
+struct Point
+{
+    float3 pos;
+    float value;
+};
+
+// Define the structure of the compute shader
+RWStructuredBuffer<Point> dataPoints;
+AppendStructuredBuffer<Triangle> outputCubes;
+RWStructuredBuffer<int> CountBuffer;
+
+uint dimX;
+uint dimY;
+uint dimZ;
+
+uint chunkSizeX;
+uint chunkSizeY;
+uint chunkSizeZ;
+
+Point cubePoints[8];
+float cubeValues[8];
+float3 cubePos[8];
+float3 edges[12]; 
+
+#define MAX_EDGE_INDEX_COUNT 12
+
+int calculateCord(int x, int y, int z)
+{
+    return z * dimX + (y * dimX * dimZ) + x;
+}
+
+void calculateCube(int x, int y, int z)
+{
+    cubePoints[0] = dataPoints[calculateCord(x, y, z)];
+    cubePoints[1] = dataPoints[calculateCord(x + 1, y, z)];
+    cubePoints[2] = dataPoints[calculateCord(x + 1, y, z + 1)];
+    cubePoints[3] = dataPoints[calculateCord(x, y, z + 1)];
+    cubePoints[4] = dataPoints[calculateCord(x, y + 1, z)];
+    cubePoints[5] = dataPoints[calculateCord(x + 1, y + 1, z)];
+    cubePoints[6] = dataPoints[calculateCord(x + 1, y + 1, z + 1)];
+    cubePoints[7] = dataPoints[calculateCord(x, y + 1, z + 1)];
+}
+
+float3 interpolate(int a, int b)
+{
+    float aValue = cubePoints[a].value;
+    float bValue = cubePoints[b].value;
+    float3 aPos = cubePoints[a].pos;
+    float3 bPos = cubePoints[b].pos;
+    
+    if ((float) aValue / bValue > 0)
+    {
+        return (aPos + bPos) / 2;
+    }
+    float t = (float) (0 - aValue) / (float) (bValue - aValue);
+    return (float3) aPos + t * (bPos - aPos);
+}
+
+uint ceil(uint a, uint b)
+{
+    if (a <= 0 || b <= 0)
+    {
+        return 0; 
+    }
+    uint mod =  a % b; 
+    uint ans = a / b; 
+    
+    if (a > b && mod > 0)
+    {
+        return ans + 1;
+    }
+    return ans;
+}
+
+int calculateChunkID(int x, int y, int z)
+{
+    uint3 divider = uint3(ceil(dimX, chunkSizeX), ceil(dimY, chunkSizeY), ceil(dimZ, chunkSizeZ));
+    
+    uint xDir = 0;
+    if (divider.x > 0)
+    {
+        xDir = x / (divider.x);
+    }
+    
+    uint zDir = 0;
+    if (divider.z > 0)
+    {
+        zDir = (z / (divider.z)) * chunkSizeX;
+    }
+    
+    uint yDir = 0;
+    if (divider.y > 0)
+    {
+        yDir = (y / (divider.y)) * chunkSizeX * chunkSizeZ;
+    }
+    
+    
+    
+    return xDir + zDir + yDir;
+}
+
+[numthreads(8, 8, 8)] // Define the number of threads in each thread group
+void ComputeMesh(uint3 id : SV_DispatchThreadID)
+{
+    // Stop one point before the end because voxel includes neighbouring points
+    if (id.x >= dimX - 1 || id.y >= dimY - 1 || id.z >= dimZ - 1)
+    {
+        return;
+    }
+    
+    calculateCube(id.x, id.y, id.z);
+    
+    // Generate data from triangulation table
+    int triTableIndex = 0;
+    int i;
+    for (i = 0; i < 8; i++)
+    {
+        if (cubePoints[i].value < 0)
+        {
+            triTableIndex |= (1 << i);
+        }
+    }
+   
+    
+    
+    // Create triangle for certain cube
+    for (i = 0; triangulation[triTableIndex][i] != -1; i += 3)
+    {
+        // Get indices of corner points A and B for each of the three edges
+        // of the cube that need to be joined to form the triangle.
+        int a0 = cornerIndexAFromEdge[triangulation[triTableIndex][i]];
+        int b0 = cornerIndexBFromEdge[triangulation[triTableIndex][i]];
+
+        int a1 = cornerIndexAFromEdge[triangulation[triTableIndex][i + 1]];
+        int b1 = cornerIndexBFromEdge[triangulation[triTableIndex][i + 1]];
+
+        int a2 = cornerIndexAFromEdge[triangulation[triTableIndex][i + 2]];
+        int b2 = cornerIndexBFromEdge[triangulation[triTableIndex][i + 2]];
+
+        Triangle tri;
+        tri.a = interpolate(a0, b0);
+        tri.b = interpolate(a1, b1);
+        tri.c = interpolate(a2, b2);
+        tri.chunkID = calculateChunkID(id.x, id.y, id.z);
+        
+        outputCubes.Append(tri);
+        InterlockedAdd(CountBuffer[0], 1);
+    }
+}

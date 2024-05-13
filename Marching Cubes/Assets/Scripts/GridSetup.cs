@@ -1,10 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Net;
-using System.Xml.Serialization;
-using TreeEditor;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class GridSetup : MonoBehaviour
@@ -13,19 +8,16 @@ public class GridSetup : MonoBehaviour
     [SerializeField] private int dimensionBase = 10;
     [SerializeField] private int dimensionHeight = 10;
     [SerializeField] private float spacing = 1f;
-    [SerializeField] private float size = 0.1f;
-    [SerializeField] private bool startAnimation = false;
     [SerializeField][Range(-10f, 10f)] private float surface = 0f;
     [SerializeField] private bool interpolate = false; 
 
     private Point[] points;
     public float distVal = 0.0001f;
+    float prevRad; 
     float[] values;
     private float[] prevValues;
-    private int prevDim;
-    private float prevPerlin;
-    public List<Vector3> vertices;
-    public List<int> triangles;
+    List<Vector3> vertices;
+    List<int> triangles;
 
     public float perlin = 0.01f;
     public float radius = 5f; 
@@ -35,93 +27,168 @@ public class GridSetup : MonoBehaviour
     public ComputeShader shader;
     ComputeBuffer bufferFloatArray;
     ComputeBuffer bufferIntArray;
-    ComputeBuffer outputFloats;
-    ComputeBuffer outputInts;
-    ComputeBuffer triTableBuffer;
+    ComputeBuffer outputCubes;
+    ComputeBuffer countBuffer; 
+
+    struct Triangle
+    {
+        public Vector3 a; 
+        public Vector3 b;
+        public Vector3 c;
+        public float value; 
+
+        public Vector3 this[int i]
+        {
+            get
+            {
+                switch (i)
+                {
+                    case 0:
+                        return a;
+                    case 1:
+                        return b;
+                    default:
+                        return c;
+                }
+            }
+        }
+    }
 
     Mesh mesh;
 
     // Start is called before the first frame update
     void Start()
     {
-        prevPerlin = perlin;
         vertices = new List<Vector3>();
         triangles = new List<int>();
         mesh = new Mesh();
-        GetComponent<MeshFilter>().mesh = mesh;
-        prevDim = dimensionBase * dimensionHeight;
-        setupGrid();      
+        GetComponent<MeshFilter>().mesh = mesh;  
+        prevRad = radius;
     }
 
-    void setupShader(Vector3[] points, int[] values)
+    private void Update()
+    {
+        if (Mathf.Abs(radius - prevRad) > 0.01f)
+        {
+            setupGrid();
+            MarchingCubes2();
+            prevRad = radius;
+        }
+    }
+
+    int[] setupCubeIndexes()
+    {
+        int[] ci = new int[(dimensionHeight - 1) * (dimensionBase - 1) * (dimensionBase -1)];
+        for (int y = 0, i = 0, cubeIndex = 0; y < (dimensionHeight - 1); y++)
+        {
+            for (int z = 0; z < (dimensionBase - 1); z++)
+            {
+                for (int x = 0; x < (dimensionBase - 1); x++)
+                {
+                    ci[i] = cubeIndex; 
+                    cubeIndex++;
+                    i++;
+                }
+                cubeIndex++;
+            }
+            cubeIndex += dimensionBase;
+        }
+        return ci; 
+    }
+
+    Triangle[] setupShader(Vector3[] points, float[] values)
     {
         if (points.Length != values.Length)
         {
             Debug.Log("Different Lengths");
-            return;
+            return null;
         }
+
         int count = points.Length;
         bufferFloatArray = new ComputeBuffer(count, sizeof(float) * 3);
-        bufferIntArray = new ComputeBuffer(count, sizeof(int));
-        outputFloats = new ComputeBuffer(count, sizeof(float) * 3, ComputeBufferType.Default);
-        outputInts = new ComputeBuffer(count, sizeof(int), ComputeBufferType.Default);
+        bufferIntArray = new ComputeBuffer(values.Length, sizeof(float));
 
-        int[][] tri = TriData.triTable;
-        triTableBuffer = new ComputeBuffer(tri.Length, sizeof(int) * tri[0].Length);
-        for (int i = 0; i < tri.Length; i++)
-        {
-            triTableBuffer.SetData(tri[i], i * sizeof(int) * tri[0].Length, 0, tri[i].Length);
-        }
+        int triCount = ((dimensionBase) * (dimensionBase) * (dimensionHeight) * 5);
+        outputCubes = new ComputeBuffer(triCount, sizeof(float) * 3 * 3, ComputeBufferType.Append);
+
+        countBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.Raw);
 
 
         bufferFloatArray.SetData(points);
         bufferIntArray.SetData(values);
 
+        int zero = 0;
+        countBuffer.SetData(new int[] { zero });
 
-        shader.SetBuffer(shader.FindKernel("CSMain"), "dataFloats", bufferFloatArray);
-        shader.SetBuffer(shader.FindKernel("CSMain"), "dataIntegers", bufferIntArray);
-        shader.SetBuffer(shader.FindKernel("CSMain"), "outputFloats", outputFloats);
-        shader.SetBuffer(shader.FindKernel("CSMain"), "outputInts", outputInts);
-        shader.SetBuffer(shader.FindKernel("CSMain"), "triTable", triTableBuffer); 
-        shader.SetInt("inputLength", count);
+        int kernel = shader.FindKernel("CSMain");
 
-        int numThreads = (count + 63) / 64;
-        shader.Dispatch(shader.FindKernel("CSMain"), numThreads, 0, 0); 
+        shader.SetBuffer(kernel, "dataFloats", bufferFloatArray);
+        shader.SetBuffer(kernel, "dataValues", bufferIntArray);
+        shader.SetBuffer(kernel, "outputCubes", outputCubes);
+        shader.SetBuffer(kernel, "CountBuffer", countBuffer);
 
+        shader.SetInt("dimBase", dimensionBase);
+        shader.SetInt("dimHeight", dimensionHeight);
+
+        int dim = Mathf.CeilToInt(dimensionBase / (float) 8); 
+        shader.Dispatch(kernel, dim, dim, dim);
+
+
+        int numtriangles = ReadTriangleCount();
+        Debug.Log(numtriangles);
+
+
+        Triangle[] triangles = new Triangle[numtriangles];
+        outputCubes.GetData(triangles);
+
+        return triangles; 
     }
 
-    private void Update()
+    int ReadTriangleCount()
     {
-        if (prevDim != dimensionHeight * dimensionBase)
-        {
-            setupGrid();
-            prevDim = dimensionBase * dimensionHeight;
-        }
-
-        //updateMesh();
-
-        if (startAnimation || prevPerlin != perlin)
-        {
-            Vector3 midpoint = (new Vector3(0, 0, 0) + new Vector3(dimensionBase - 1, dimensionHeight - 1, dimensionBase - 1)) / 2;
-            for (int y = 0, i = 0; y < dimensionHeight; y++)
-            {
-                for (int z = 0; z < dimensionBase; z++)
-                {
-                    for (int x = 0; x < dimensionBase; x++)
-                    {
-                        values[i] = (Vector3.Distance(new Vector3(x, y, z), midpoint) * height) - radius;
-                        points[i].value = values[i];
-                        i++;
-
-                    }
-                }
-            }
-            prevPerlin = perlin;
-            MarchingCubes();
-            copyValues();
-            startAnimation = false;
-        }
+        int[] triCount = { 0 };
+        ComputeBuffer.CopyCount(outputCubes, countBuffer, 0);
+        countBuffer.GetData(triCount);
+        return triCount[0];
     }
+
+    void MarchingCubes2()
+    {
+        vertices.Clear();
+        triangles.Clear();
+
+        Debug.Log("Here1");
+        // Run the shader 
+        Triangle[] triangles2 = setupShader(extractPositions(points), values);
+        Debug.Log("Here2");
+        int index = 0;
+        foreach (var triangle in triangles2)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 position = triangle[i];
+                vertices.Add(position);
+                triangles.Add(index++);
+            }
+        }
+        Debug.Log("Here3");
+        mesh.Clear();
+        mesh.vertices = vertices.ToArray();
+        mesh.triangles = triangles.ToArray();
+        mesh.RecalculateNormals();
+    }
+
+    Vector3[] extractPositions(Point[] points)
+    {
+        Vector3[] extractedPositions = new Vector3[points.Length];
+        for (int i = 0; i < points.Length; i++) 
+        {
+            extractedPositions[i] = points[i].pos;
+        }
+        return extractedPositions;
+    }
+         
+    
 
     void MarchingCubes()
     {
@@ -165,7 +232,7 @@ public class GridSetup : MonoBehaviour
         List<Vector3> appendedEdges = new List<Vector3>();
         for (int i = 0; i < edges.Length; i++)
         {
-            int index = findSameEdge(vertices, edges[i]);
+            int index = findSameEdge(vertices, edges[i], distVal);
 
             if (index != -1)
             {
@@ -189,13 +256,13 @@ public class GridSetup : MonoBehaviour
         triangles.AddRange(tri);
     }
 
-    int findSameEdge(List<Vector3> edges, Vector3 searchEdge)
+    int findSameEdge(List<Vector3> edges, Vector3 searchEdge, float distMax)
     {
         for (int i = 0; i < edges.Count; i++)
         {
             float dist = Vector3.Distance(edges[i], searchEdge);
 
-            if (dist < distVal)
+            if (dist < distMax)
             {
                 return i;
             }
@@ -218,31 +285,14 @@ public class GridSetup : MonoBehaviour
             {
                 for (int x = 0; x < dimensionBase; x++)
                 {
-                    values[i] = (Vector3.Distance(new Vector3(x, y, z), midpoint) * height) - 5f;
-                    points[i] = new Point(new Vector3(x, y, z) * spacing + transform.position, values[i] , Color.black); 
+                    values[i] = (Vector3.Distance(new Vector3(x, y, z), midpoint) * height) - radius;
+                    points[i] = new Point(transform.TransformPoint(new Vector3(x, y, z) * spacing + transform.position), values[i] , Color.black); 
                     i++;
                         
                 }
             }
         }
         copyValues();
-    }
-
-    float Perlin3D(float x, float y, float z)
-    {
-        x = x * perlin;
-        y = y * perlin;
-        z = z * perlin; 
-
-        float AB = Mathf.PerlinNoise(x, y) * 2 - 1;
-        float BC = Mathf.PerlinNoise(y, z) * 2 - 1;
-        float CA = Mathf.PerlinNoise(z, x) * 2 - 1;
-
-        float BA = Mathf.PerlinNoise(y, x) * 2 - 1;
-        float AC = Mathf.PerlinNoise(x, z) * 2 - 1;
-        float CB = Mathf.PerlinNoise(z, y) * 2 - 1;
-
-        return (AB + BC + CA + BA + AC + CB) / 6f;
     }
 
     void copyValues()
@@ -322,7 +372,7 @@ public class GridSetup : MonoBehaviour
         List<Vector3> edgesInAlgorithm = new List<Vector3>();
         foreach (var index in edgesFromTri)
         {
-            edgesInAlgorithm.Add(transform.TransformPoint(edges[index])); 
+            edgesInAlgorithm.Add(edges[index]); 
         }
         return edgesInAlgorithm.ToArray();
     }
@@ -362,26 +412,25 @@ public class GridSetup : MonoBehaviour
         Gizmos.DrawLine(pointsInCube[3].pos, pointsInCube[7].pos);
     }
 
+    void Release()
+    {
+        bufferFloatArray.Release();
+        bufferIntArray.Release();
+        outputCubes.Release();
+        countBuffer.Release();
+
+        bufferFloatArray = null;
+        bufferIntArray = null;
+        outputCubes = null;
+        countBuffer = null;
+    }
+
     private void OnDestroy()
     {
-        // Release the compute buffers
-        if (bufferFloatArray != null)
-        {
-            bufferFloatArray.Release();
-        }
-        if (bufferIntArray != null)
-        {
-            bufferIntArray.Release();
-        }
-        if (outputFloats != null)
-        {
-            outputFloats.Release();
-        }
-        if (outputInts != null)
-        {
-            outputInts.Release();
-        }
+        if (bufferFloatArray == null) { return; }
+        Release();
     }
+
 
     //private void OnDrawGizmos()
     //{
@@ -412,24 +461,5 @@ public class GridSetup : MonoBehaviour
         }
     }
 }
-
-
-
-    public static class GradientColorGenerator
-    {
-        private static float minValue = -10f;
-        private static float maxValue = 10f;
-
-        // Function to generate a color gradient based on a value
-        public static Color GetColorFromValue(float value)
-        {
-            // Normalize the value within the range
-            float t = Mathf.InverseLerp(minValue, maxValue, value);
-
-            // Map the normalized value to a color gradient from black to white
-            return Color.Lerp(Color.black, Color.white, t);
-        }
-
-    }
 
 

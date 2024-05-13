@@ -1,0 +1,105 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel ComputePoints
+#include "Tables.compute"
+#include "NoiseGenerator.compute"
+
+struct Point
+{
+    float3 pos;
+    float value;
+};
+
+uint dimX;
+uint dimY;
+uint dimZ; 
+float perlinMultiplier; 
+float perlinHeight; 
+float size;
+uint shape; 
+RWStructuredBuffer<Point> outputPoints;
+RWStructuredBuffer<int> CountBuffer;
+
+
+
+
+float3 getMidpoint()
+{
+    return float3((float) (dimX - 1) / 2, (float) (dimY - 1) / 2, (float) (dimZ - 1) / 2);
+}
+
+float dist(float3 a, float3 b)
+{
+    float x = abs((float1) a.x - b.x);
+    float y = abs((float1) a.y - b.y);
+    float z = abs((float1) a.z - b.z);
+    
+    return length(float3(x, y, z));
+}
+
+int calculateIndex(int x, int y, int z)
+{
+    return x + y * (dimX * dimZ) + z * dimX; 
+}
+
+float getValueCircle(float3 pos)
+{
+    float3 midpoint = getMidpoint();
+    float distance = dist(midpoint, pos);
+    float value = (distance - (float) dimX / 2) + 1;
+    return (value - (perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight)) +perlinHeight;
+}
+
+float getValuePlane(float3 pos)
+{
+    float noise = perlinNoise(pos.x * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight; 
+    return ((pos.y - noise) - (perlinHeight + 1));
+}
+
+//float getValueTube(float3 pos)
+//{
+//    if (pos.x == dimX - 3 || pos.y == dimY - 3 || pos.z == dimZ - 3)
+//    {
+//        return -1; 
+//    }
+//    float3 midpoint = getMidpoint();
+//    float distance = dist(midpoint, pos);
+//    float value = (distance - (float) dimX / 2) + 1;
+//    float perlin3D = perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight;
+//    return - (value - perlin3D) + perlinHeight;
+//}
+
+
+
+[numthreads(8,8,8)]
+void ComputePoints(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= dimX || id.y >= dimY || id.z >= dimZ)
+    {
+        return;
+    }
+    
+    float3 pos = float3(id.x, id.y, id.z);
+    float value;
+    if (shape == 0)
+    {
+        value = getValueCircle(pos);
+    } 
+    else
+    {
+        value = getValuePlane(pos);
+    }
+    //else
+    //{
+    //    value = getValueTube(pos);
+    //}
+    
+    
+    pos = pos * size;
+    
+    Point p;
+    p.pos = pos;
+    p.value = value;
+    
+    outputPoints[calculateIndex(id.x, id.y, id.z)] = p;
+    InterlockedAdd(CountBuffer[0], 1);
+}
