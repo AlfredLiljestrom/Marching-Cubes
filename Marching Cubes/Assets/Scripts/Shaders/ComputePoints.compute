@@ -9,43 +9,38 @@ struct Point
     float value;
 };
 
-uint dimX;
-uint dimY;
-uint dimZ; 
+uint3 dim;
+//float3 startPos;
+//float3 endPos; 
+float3 size;
+
+float3 midPoint; 
+
 float perlinMultiplier; 
 float perlinHeight; 
-float size;
+
 uint shape; 
 RWStructuredBuffer<Point> outputPoints;
 RWStructuredBuffer<int> CountBuffer;
 
-
-
-
-float3 getMidpoint()
-{
-    return float3((float) (dimX - 1) / 2, (float) (dimY - 1) / 2, (float) (dimZ - 1) / 2);
-}
-
 float dist(float3 a, float3 b)
 {
-    float x = abs((float1) a.x - b.x) / dimX;
-    float y = abs((float1) a.y - b.y) / dimY;
-    float z = abs((float1) a.z - b.z) / dimZ;
+    float x = abs((float1) a.x - b.x) / dim.x;
+    float y = abs((float1) a.y - b.y) / dim.y;
+    float z = abs((float1) a.z - b.z) / dim.z;
     
     return length(float3(x, y, z));
 }
 
 int calculateIndex(int x, int y, int z)
 {
-    return x + y * (dimX * dimZ) + z * dimX; 
+    return x + y * (dim.x * dim.z) + z * dim.x; 
 }
 
 float getValueCircle(float3 pos)
 {
-    float averageDim = (dimX + dimY + dimZ) / 3;
-    float3 midpoint = getMidpoint();
-    float distance = dist(midpoint, pos) * averageDim;
+    float averageDim = (dim.x + dim.y + dim.z) / 3;
+    float distance = dist(midPoint, pos) * averageDim;
     float value = (distance - (float) averageDim / 2) + 1;
     return (value - (perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight)) + perlinHeight / 2;
 }
@@ -58,29 +53,38 @@ float getValuePlane(float3 pos)
 
 float getValueTube(float3 pos)
 {
-    //if (pos.x == dimX - 3 || pos.y == dimY - 3 || pos.z == dimZ - 3)
-    //{
-    //    return -1;
-    //}
-    float averageDim = (dimX + dimY + dimZ) / 3;
-    float3 midpoint = getMidpoint();
-    float distance = dist(midpoint, pos) * averageDim;
+    if (pos.x > dim.x - 3 || pos.y == dim.y - 3 || pos.z == dim.z - 3)
+    {
+        return 1;
+    }
+    float averageDim = (dim.x + dim.y + dim.z) / 3;
+    float distance = dist(midPoint, pos) * averageDim;
     float value = (distance - (float) averageDim / 2) + 1;
     float perlin3D = (perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) - 1) / 2 * perlinHeight;
     return -(value - perlin3D) - 2;
 }
 
+//float3 offset(uint x, uint y, uint z)
+//{
+//    float3 val = endPos - startPos; 
+//    float xCord = ((float) x / dim.x) * val.x; 
+//    float yCord = ((float) y / dim.y) * val.y;
+//    float zCord = ((float) z / dim.z) * val.z;
+//    return float3(xCord, yCord, zCord); 
+//}
 
 
 [numthreads(8,8,8)]
 void ComputePoints(uint3 id : SV_DispatchThreadID)
 {
-    if (id.x >= dimX || id.y >= dimY || id.z >= dimZ)
+    if (id.x >= dim.x || id.y >= dim.y || id.z >= dim.z)
     {
         return;
     }
     
-    float3 pos = float3(id.x, id.y, id.z);
+    
+    
+    float3 pos = float3(id.x, id.y, id.z); //+ offset(id.x, id.y, id.z); 
     float value;
     if (shape == 0)
     {

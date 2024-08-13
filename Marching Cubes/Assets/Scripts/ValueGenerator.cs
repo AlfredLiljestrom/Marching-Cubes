@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
 
@@ -12,10 +13,13 @@ public class ValueGenerator
     ComputeBuffer countBuffer;
     ComputeShader shader;
 
-    public Vector3Int dim; 
+    public Vector3Int dim;
+    //public Vector3 start; 
+    //public Vector3 end;
+    public Vector3 size;
 
     int shape;
-    public float size;
+    
     public float perlinMultiplier = .1f;
     public float perlinHeight = 3f; 
     Point[] points;
@@ -26,6 +30,11 @@ public class ValueGenerator
     {
         this.shader = shader;
         this.shape = shape;
+    }
+
+    Vector3 getMidpoint()
+    {
+        return size / 2f; 
     }
 
 
@@ -39,14 +48,18 @@ public class ValueGenerator
 
         countBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.Raw);
         countBuffer.SetData(new int[] { 0 });
-        shader.SetInt("dimX", dim.x);
-        shader.SetInt("dimY", dim.y);
-        shader.SetInt("dimZ", dim.z);
+        shader.SetInts("dim", dim.x, dim.y, dim.z);
+        
         shader.SetInt("shape", shape);
         shader.SetFloat("perlinMultiplier", perlinMultiplier);
         shader.SetFloat("perlinHeight", perlinHeight); 
-        shader.SetFloat("size", size);  
+        shader.SetFloats("size", size.x, size.y, size.z);  
+        
+        //shader.SetFloats("startPos", start.x, start.y, start.z);
+        //shader.SetFloats("endPos", end.x, end.y, end.z);
 
+        Vector3 mid = getMidpoint();
+        shader.SetFloats("midPoint", mid.x, mid.y, mid.z); 
 
         int kernel = shader.FindKernel("ComputePoints");
         shader.SetBuffer(kernel, "outputPoints", valueBuffer);
