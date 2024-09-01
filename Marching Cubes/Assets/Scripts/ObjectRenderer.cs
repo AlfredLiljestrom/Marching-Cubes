@@ -28,7 +28,7 @@ public class ObjectRenderer : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (createBall )
+        if (createBall)
         {
             gameObjects.Add(Instantiate(ballPrefab, Vector3.zero, Quaternion.identity));
             createBall = false;

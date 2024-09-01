@@ -5,7 +5,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 
 
-public class MarchingCubes
+public class MarchingCubes2
 {
     Vector3Int dim;
 
@@ -13,9 +13,8 @@ public class MarchingCubes
 
 
     public ChunkInfo[] chunkInfos;
-    Vector3Int numChunks;
 
-    ComputeBuffer pointBuffer; 
+    ComputeBuffer pointBuffer;
     ComputeBuffer outputCubes;
     ComputeBuffer countBuffer;
 
@@ -25,26 +24,24 @@ public class MarchingCubes
 
 
 
-    public MarchingCubes(Vector3Int dim, 
-       ComputeShader shader, Vector3Int numChunks, Point[] points, Vector3 size)
+    public MarchingCubes2(Vector3Int dim,
+       ComputeShader shader, Point[] points, Vector3 size)
     {
         this.dim = dim;
         this.shader = shader;
-        this.numChunks = numChunks;
-        this.points = points; 
+        this.points = points;
         this.size = size;
     }
 
-    public void setValues(Vector3Int dim, Vector3Int numChunks, Point[] points)
+    public void setValues(Vector3Int dim, Point[] points)
     {
         this.dim = dim;
-        this.numChunks = numChunks;
         this.points = points;
     }
 
     Triangle[] setupShader(Point[] points)
     {
-        
+        Release();
         int triCountS = (dim.x - 1) * (dim.y - 1) * (dim.z - 1) * 5;
         int sizeT = Marshal.SizeOf(typeof(Triangle));
         outputCubes = new ComputeBuffer(triCountS, sizeT, ComputeBufferType.Append);
@@ -62,49 +59,45 @@ public class MarchingCubes
         int kernel = shader.FindKernel("ComputeMesh");
         shader.SetBuffer(kernel, "outputCubes", outputCubes);
         shader.SetBuffer(kernel, "CountBuffer", countBuffer);
-        shader.SetBuffer(kernel, "dataPoints", pointBuffer); 
+        shader.SetBuffer(kernel, "dataPoints", pointBuffer);
 
         shader.SetInt("dimX", dim.x);
         shader.SetInt("dimY", dim.y);
         shader.SetInt("dimZ", dim.z);
 
-        shader.SetInt("chunkSizeX", numChunks.x);
-        shader.SetInt("chunkSizeY", numChunks.y);
-        shader.SetInt("chunkSizeZ", numChunks.z);
-
-        int threadsX = Mathf.CeilToInt(dim.x / (float) 8);
-        int threadsY = Mathf.CeilToInt(dim.y / (float) 8);
-        int threadsZ = Mathf.CeilToInt(dim.z / (float) 8);
+        int threadsX = Mathf.CeilToInt(dim.x / (float)8);
+        int threadsY = Mathf.CeilToInt(dim.y / (float)8);
+        int threadsZ = Mathf.CeilToInt(dim.z / (float)8);
         shader.Dispatch(kernel, threadsX, threadsY, threadsZ);
 
         int[] triCount = { 0 };
 
-        
+
         countBuffer.GetData(triCount);
-        
+
 
         int numtriangles = triCount[0];
 
         Triangle[] triangles = new Triangle[numtriangles];
         outputCubes.GetData(triangles);
 
-        Release();
+
         return triangles;
     }
 
     public void MarchingCubesAlgorithmS()
     {
 
-        Vector3 mid; 
+        Vector3 mid;
         mid.x = (dim.x - 1) / size.x * 2;
         mid.y = (dim.y - 1) / size.y * 2;
         mid.z = (dim.z - 1) / size.z * 2;
 
         // Run the shader 
         Triangle[] triangles2 = setupShader(points);
-        chunkInfos = new ChunkInfo[numChunks.x * numChunks.z * numChunks.y];
+        chunkInfos = new ChunkInfo[1];
 
-        
+
 
         foreach (var triangle in triangles2)
         {
@@ -123,12 +116,12 @@ public class MarchingCubes
             }
         }
 
-        stripChunkInfos(); 
+        stripChunkInfos();
     }
 
     void stripChunkInfos()
     {
-        List<ChunkInfo> chunkInfoList = new List<ChunkInfo>();  
+        List<ChunkInfo> chunkInfoList = new List<ChunkInfo>();
         foreach (var chunkInfo in chunkInfos)
         {
             if (chunkInfo == null) continue;
@@ -165,47 +158,4 @@ public class MarchingCubes
 }
 
 
-struct Triangle
-{
-    public Vector3 a;
-    public Vector3 b;
-    public Vector3 c;
-    public int chunkID; 
 
-    public Vector3 this[int i]
-    {
-        get
-        {
-            switch (i)
-            {
-                case 0:
-                    return a;
-                case 1:
-                    return b;
-                default:
-                    return c;
-            }
-        }
-    }
-}
-
-public class ChunkInfo
-{
-    public List<Vector3> vertices;
-    public List<int>triangles;
-    public int index;
-    public int chunkID;
-
-    public ChunkInfo(int chunkID)
-    {
-        vertices = new List<Vector3>();
-        triangles = new List<int>();
-        index = 0;
-        this.chunkID = chunkID;
-    }
-
-    public void increment()
-    {
-        triangles.Add(index++);
-    }
-}

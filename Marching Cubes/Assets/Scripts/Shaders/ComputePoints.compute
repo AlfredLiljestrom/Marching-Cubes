@@ -10,9 +10,9 @@ struct Point
 };
 
 uint3 dim;
-//float3 startPos;
-//float3 endPos; 
-float3 size;
+float3 startPos;
+float3 endPos; 
+float size;
 
 float3 midPoint; 
 
@@ -23,15 +23,6 @@ uint shape;
 RWStructuredBuffer<Point> outputPoints;
 RWStructuredBuffer<int> CountBuffer;
 
-float dist(float3 a, float3 b)
-{
-    float x = abs((float1) a.x - b.x) / dim.x;
-    float y = abs((float1) a.y - b.y) / dim.y;
-    float z = abs((float1) a.z - b.z) / dim.z;
-    
-    return length(float3(x, y, z));
-}
-
 int calculateIndex(int x, int y, int z)
 {
     return x + y * (dim.x * dim.z) + z * dim.x; 
@@ -39,39 +30,30 @@ int calculateIndex(int x, int y, int z)
 
 float getValueCircle(float3 pos)
 {
-    float averageDim = (dim.x + dim.y + dim.z) / 3;
-    float distance = dist(midPoint, pos) * averageDim;
-    float value = (distance - (float) averageDim / 2) + 1;
-    return (value - (perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight)) + perlinHeight / 2;
+    
+    float distan = distance(midPoint, pos);
+    float perlinNoise = perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight;
+    
+    return ((distan - size / 2) - perlinNoise) + 10;
+    
 }
 
 float getValuePlane(float3 pos)
 {
-    float noise = perlinNoise(pos.x * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight; 
-    return ((pos.y - noise) - (perlinHeight + 1));
+    float noise = perlinNoise(pos.x * perlinMultiplier, pos.z * perlinMultiplier) * perlinHeight;
+    return ((pos.y - noise) - (perlinHeight/2) - 30);
 }
 
-float getValueTube(float3 pos)
+
+float3 offset(uint x, uint y, uint z)
 {
-    if (pos.x > dim.x - 3 || pos.y == dim.y - 3 || pos.z == dim.z - 3)
-    {
-        return 1;
-    }
-    float averageDim = (dim.x + dim.y + dim.z) / 3;
-    float distance = dist(midPoint, pos) * averageDim;
-    float value = (distance - (float) averageDim / 2) + 1;
-    float perlin3D = (perlinNoise3D(pos.x * perlinMultiplier, pos.y * perlinMultiplier, pos.z * perlinMultiplier) - 1) / 2 * perlinHeight;
-    return -(value - perlin3D) - 2;
-}
+    float3 step = (endPos - startPos) / (float3(dim.x, dim.y, dim.z) - 1.0f); // Step size
+    float xCord = x * step.x;
+    float yCord = y * step.y;
+    float zCord = z * step.z;
 
-//float3 offset(uint x, uint y, uint z)
-//{
-//    float3 val = endPos - startPos; 
-//    float xCord = ((float) x / dim.x) * val.x; 
-//    float yCord = ((float) y / dim.y) * val.y;
-//    float zCord = ((float) z / dim.z) * val.z;
-//    return float3(xCord, yCord, zCord); 
-//}
+    return float3(xCord, yCord, zCord);
+}
 
 
 [numthreads(8,8,8)]
@@ -84,8 +66,9 @@ void ComputePoints(uint3 id : SV_DispatchThreadID)
     
     
     
-    float3 pos = float3(id.x, id.y, id.z); //+ offset(id.x, id.y, id.z); 
-    float value;
+    //float3 pos = float3(id.x, id.y, id.z) + offset(id.x, id.y, id.z); 
+    float3 pos = startPos + offset(id.x, id.y, id.z);
+    float value = 0;
     if (shape == 0)
     {
         value = getValueCircle(pos);
@@ -94,13 +77,6 @@ void ComputePoints(uint3 id : SV_DispatchThreadID)
     {
         value = getValuePlane(pos);
     }
-    else
-    {
-        value = getValueTube(pos);
-    }
-    
-    
-    pos = pos * size;
     
     Point p;
     p.pos = pos;

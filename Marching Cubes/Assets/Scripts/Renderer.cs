@@ -92,7 +92,7 @@ public class Renderer : MonoBehaviour
 
         }
         vg.dim = dimensions;
-        vg.size = size;
+        //vg.size = size;
         vg.perlinMultiplier = perlinMul;
         vg.perlinHeight = perlinHeight;
 
@@ -112,9 +112,6 @@ public class Renderer : MonoBehaviour
 
 
         generateChunks(mc.chunkInfos);
-
-
-        
         transform.position = currentPosition;
     }
 

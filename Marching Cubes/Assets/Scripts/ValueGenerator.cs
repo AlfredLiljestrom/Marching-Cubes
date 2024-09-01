@@ -14,9 +14,10 @@ public class ValueGenerator
     ComputeShader shader;
 
     public Vector3Int dim;
-    //public Vector3 start; 
-    //public Vector3 end;
-    public Vector3 size;
+    public Vector3 start; 
+    public Vector3 end;
+    public Vector3 mid;
+    public float size;
 
     int shape;
     
@@ -30,11 +31,6 @@ public class ValueGenerator
     {
         this.shader = shader;
         this.shape = shape;
-    }
-
-    Vector3 getMidpoint()
-    {
-        return size / 2f; 
     }
 
 
@@ -53,12 +49,11 @@ public class ValueGenerator
         shader.SetInt("shape", shape);
         shader.SetFloat("perlinMultiplier", perlinMultiplier);
         shader.SetFloat("perlinHeight", perlinHeight); 
-        shader.SetFloats("size", size.x, size.y, size.z);  
+        shader.SetFloat("size", size);  
         
-        //shader.SetFloats("startPos", start.x, start.y, start.z);
-        //shader.SetFloats("endPos", end.x, end.y, end.z);
+        shader.SetFloats("startPos", start.x, start.y, start.z);
+        shader.SetFloats("endPos", end.x, end.y, end.z);
 
-        Vector3 mid = getMidpoint();
         shader.SetFloats("midPoint", mid.x, mid.y, mid.z); 
 
         int kernel = shader.FindKernel("ComputePoints");
@@ -86,18 +81,19 @@ public class ValueGenerator
 
     void Release()
     {
-        try
+        if (valueBuffer != null)
         {
             valueBuffer.Release();
-            countBuffer.Release();
-            countBuffer.Dispose();
             valueBuffer.Dispose();
             valueBuffer = null;
+        }
+
+        if (countBuffer != null)
+        {
+            countBuffer.Release();
+            countBuffer.Dispose();
             countBuffer = null;
         }
-        catch
-        { Debug.Log("Failed value"); }
-        
     }
 
     int countVector(Vector3Int vector)
